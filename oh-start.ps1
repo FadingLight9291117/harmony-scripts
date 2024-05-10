@@ -1,0 +1,1 @@
+hdc shell aa start -a EntryAbility -b cn.wps.mobileoffice.hap
