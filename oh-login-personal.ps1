@@ -1,1 +1,1 @@
-./oh-login personal
+oh-login personal

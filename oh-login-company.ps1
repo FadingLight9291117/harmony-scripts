@@ -1,1 +1,1 @@
-./oh-login company
+oh-login company
