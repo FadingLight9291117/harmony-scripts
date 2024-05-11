@@ -1,1 +1,1 @@
-Oh-Login personal
+Oh-Login -Type personal
