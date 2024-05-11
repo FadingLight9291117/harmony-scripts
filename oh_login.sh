@@ -1,3 +1,4 @@
+# !/bin/bash
 login_type=$1
 
 file_dir="preferences_personal"
