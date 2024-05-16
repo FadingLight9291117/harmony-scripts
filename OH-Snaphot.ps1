@@ -18,8 +18,10 @@ $local_path = "${Path}\$out_file_name"
 hdc shell snapshot_display -f $oh_path
 hdc hdc file recv $oh_path $local_path
 
+$full_local_path = (Get-Item -Path $local_path).FullName
+
 Write-Output ""
 Write-Host -ForegroundColor GREEN "[√] " -NoNewline;
-Write-Output "export in $local_path"
+Write-Output "export in $full_local_path"
 
-Start-Process $local_path
+Invoke-Item -Path $full_local_path

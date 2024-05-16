@@ -14,8 +14,10 @@ Remove-Item $local_path -Recurse -Force
 hdc shell snapshot_display
 hdc file recv $oh_path $local_path
 
+$full_local_path = (Get-Item -Path $local_path).FullName
+
 Write-Output ""
 Write-Host -ForegroundColor GREEN "[√] " -NoNewline;
-Write-Output "export in $local_path"
+Write-Output "export in $full_local_path"
 
-explorer.exe $local_path
+Invoke-Item -Path $full_local_path
