@@ -1,0 +1,1 @@
+hdc uninstall cn.wps.mobileoffice.hap
