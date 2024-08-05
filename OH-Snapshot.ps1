@@ -24,4 +24,10 @@ Write-Output ""
 Write-Host -ForegroundColor GREEN "[√] " -NoNewline;
 Write-Output "export in $full_local_path"
 
+# 复制图片到剪切板
+Add-Type -AssemblyName System.Drawing                       # 添加System.Drawing程序集（如果还未加载）
+Add-Type -AssemblyName System.Windows.Forms                 # 添加System.Windows.Forms程序集
+$image = [System.Drawing.Image]::FromFile($full_local_path) # 加载图片
+[System.Windows.Forms.Clipboard]::SetImage($image)          # 将图片设置到剪切板
+
 Invoke-Item -Path $full_local_path
