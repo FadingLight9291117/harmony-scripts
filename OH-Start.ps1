@@ -1,1 +1,6 @@
-hdc shell aa start -a EntryAbility -b cn.wps.mobileoffice.hap
+Load-Env
+
+OH-Start-App
+
+Write-Host -ForegroundColor GREEN "[√] " -NoNewline;
+Write-Output "start app successful."
