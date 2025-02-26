@@ -6,7 +6,7 @@ if (!$Path) {
     return
 }
 
-hdc uninstall cn.wps.mobileoffice.hap
+Load-Env
 
 hdc file send $Path data/local/tmp/aa1dbdb65a2c4d9b80567965e3c422f6
 
@@ -14,4 +14,9 @@ hdc shell bm install -p data/local/tmp/aa1dbdb65a2c4d9b80567965e3c422f6
 
 hdc shell rm -rf data/local/tmp/aa1dbdb65a2c4d9b80567965e3c422f6
 
-hdc shell aa start -a EntryAbility -b cn.wps.mobileoffice.hap
+OH-Start-App
+
+Unload-Env
+
+Write-Host -ForegroundColor GREEN "[√] " -NoNewline;
+Write-Output "install app successfully."

@@ -1,0 +1,1 @@
+hdc shell hilog -w clear
