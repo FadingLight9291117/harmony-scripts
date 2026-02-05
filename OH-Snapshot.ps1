@@ -16,7 +16,8 @@ $oh_path = "/data/local/tmp/$file_name"
 $local_path = "${Path}\$out_file_name"
 
 hdc shell snapshot_display -f $oh_path
-hdc hdc file recv $oh_path $local_path
+hdc file recv $oh_path $local_path
+hdc shell rm -f $oh_path
 
 $full_local_path = (Get-Item -Path $local_path).FullName
 

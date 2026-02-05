@@ -9,9 +9,6 @@ if (!(Test-Path $Path -PathType Container)) {
 $oh_path = '/storage/media/100/local/files/Photo'
 $local_path = $Path
 
-Remove-Item $local_path -Recurse -Force
-
-hdc shell snapshot_display
 hdc file recv $oh_path $local_path
 
 $full_local_path = (Get-Item -Path $local_path).FullName
