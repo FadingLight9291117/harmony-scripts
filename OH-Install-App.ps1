@@ -1,147 +1,199 @@
 param(
-    [string]$Path # path to .hap file or .zip/.rar archive
+    [string]$Path  # path to directory containing .hap/.hsp/.har files or compressed archive (.zip, .rar, .7z, .tar, .gz)
 )
 
-function Log-Message([string]$Message, [string]$Level = "INFO") {
-    $timestamp = Get-Date -Format "HH:mm:ss"
-    switch ($Level) {
-        "INFO" {
-            Write-Output "[$timestamp] [INFO] $Message"
-        }
-        "SUCCESS" {
-            Write-Host -ForegroundColor GREEN "[√] [$timestamp] [SUCCESS] $Message"
-        }
-        "WARNING" {
-            Write-Host -ForegroundColor YELLOW "[!] [$timestamp] [WARNING] $Message"
-        }
-        "ERROR" {
-            Write-Host -ForegroundColor RED "[✗] [$timestamp] [ERROR] $Message"
-        }
-    }
-}
-
-$start_time = Get-Date
-Log-Message "Starting installation process" "INFO"
-Log-Message "Input path: $Path" "INFO"
-
 if (!$Path) {
-    Log-Message "Path parameter is required" "ERROR"
+    Write-Output "Error: Path parameter required"
+    Write-Output "Usage: .\OH-Install-App.ps1 -Path 'path/to/directory' or 'path/to/archive.zip'"
     return
 }
 
 # Validate path exists
 if (!(Test-Path $Path)) {
-    Log-Message "File not found: $Path" "ERROR"
+    Write-Output "Error: Path does not exist - $Path"
     return
 }
 
-$file_name = Split-Path -Leaf $Path
-$file_size = (Get-Item $Path).Length / 1MB
-Log-Message "File: $file_name ($('{0:F2}' -f $file_size) MB)" "INFO"
+Load-Env
 
-$temp_dir = "data/local/tmp/aa1dbdb65a2c4d9b80567965e3c422f6"
-$file_ext = [System.IO.Path]::GetExtension($file_name).ToLower()
+# Generate random temp directory name
+$random_id = [guid]::NewGuid().ToString("N").Substring(0, 16)
+$temp_dir = "data/local/tmp/oh_install_$random_id"
+$local_temp = $env:TEMP + "\oh_install_temp"
+$source_dir = ""
 
-# Check if path is archive (zip or rar) or .hap file
-if ($file_ext -eq '.zip' -or $file_ext -eq '.rar') {
-    Log-Message "Archive detected: $file_ext" "INFO"
+# Check if path is a directory or archive
+$path_item = Get-Item -Path $Path
+$is_directory = $path_item -is [System.IO.DirectoryInfo]
+
+if ($is_directory) {
+    Write-Output "Directory detected: $Path"
+    $source_dir = $Path
     
-    # Extract archive to temporary directory
-    $extract_dir = Join-Path $env:TEMP "oh_install_$([System.Guid]::NewGuid().ToString().Substring(0, 8))"
-    Log-Message "Creating extraction directory: $extract_dir" "INFO"
+} else {
+    # Check if input is a compressed archive
+    $file_ext = [System.IO.Path]::GetExtension($Path).ToLower()
+    $is_archive = @('.zip', '.rar', '.7z', '.tar', '.gz') -contains $file_ext
     
+    if (!$is_archive) {
+        Write-Output "Error: Expected directory or supported archive (.zip, .rar, .7z, .tar, .gz). Got: $file_ext"
+        return
+    }
+    
+    Write-Output "Archive detected: $Path"
+    
+    # Create temporary directory for extraction
+    if (Test-Path $local_temp) {
+        Remove-Item -Path $local_temp -Recurse -Force | Out-Null
+    }
+    New-Item -Path $local_temp -ItemType Directory | Out-Null
+    
+    # Extract archive based on file type
     try {
-        if ($file_ext -eq '.zip') {
-            Log-Message "Extracting ZIP archive..." "INFO"
-            Expand-Archive -Path $Path -DestinationPath $extract_dir -Force
-            Log-Message "ZIP extraction completed successfully" "SUCCESS"
-        }
-        else {
-            # For .rar files, check if WinRAR is installed
-            $winrar_path = "C:\Program Files\WinRAR\UnRAR.exe"
-            if (!(Test-Path $winrar_path)) {
-                Log-Message "WinRAR not found at $winrar_path" "ERROR"
-                Log-Message "Please install WinRAR or use .zip archives" "ERROR"
+        switch ($file_ext) {
+            '.zip' {
+                Write-Output "Extracting ZIP archive..."
+                Expand-Archive -Path $Path -DestinationPath $local_temp -Force
+            }
+            '.7z' {
+                Write-Output "Extracting 7Z archive..."
+                # Requires 7-Zip to be installed
+                if (!(Get-Command 7z -ErrorAction SilentlyContinue)) {
+                    Write-Output "Error: 7-Zip not found. Please install 7-Zip or use .zip format"
+                    return
+                }
+                & 7z x $Path -o"$local_temp" -y | Out-Null
+            }
+            '.rar' {
+                Write-Output "Extracting RAR archive..."
+                # Requires WinRAR to be installed
+                if (!(Get-Command UnRAR -ErrorAction SilentlyContinue)) {
+                    Write-Output "Error: WinRAR not found. Please install WinRAR or use .zip format"
+                    return
+                }
+                & UnRAR x $Path "$local_temp\" -y | Out-Null
+            }
+            default {
+                Write-Output "Error: Unsupported archive format - $file_ext"
                 return
             }
-            
-            Log-Message "Extracting RAR archive with WinRAR..." "INFO"
-            & $winrar_path x -y $Path $extract_dir | Out-Null
-            Log-Message "RAR extraction completed successfully" "SUCCESS"
         }
-    }
-    catch {
-        Log-Message "Extraction failed: $_" "ERROR"
-        if (Test-Path $extract_dir) {
-            Remove-Item -Path $extract_dir -Recurse -Force
+        
+        Write-Output "Archive extracted successfully"
+        $source_dir = $local_temp
+        
+    } catch {
+        Write-Output "Error during extraction: $_"
+        if (Test-Path $local_temp) {
+            Remove-Item -Path $local_temp -Recurse -Force | Out-Null
         }
+        Unload-Env
         return
     }
-    
-    # Find .hap file in extracted directory
-    Log-Message "Searching for .hap files in extracted directory..." "INFO"
-    $hap_files = @(Get-ChildItem -Path $extract_dir -Filter "*.hap" -Recurse)
-    Log-Message "Found $($hap_files.Count) .hap file(s)" "INFO"
-    
-    if ($hap_files.Count -eq 0) {
-        Log-Message "No .hap files found in archive" "ERROR"
-        Log-Message "Cleaning up extraction directory..." "INFO"
-        Remove-Item -Path $extract_dir -Recurse -Force
-        Log-Message "Cleanup completed" "SUCCESS"
-        return
-    }
-    elseif ($hap_files.Count -gt 1) {
-        Log-Message "Multiple .hap files found, installing first one: $($hap_files[0].Name)" "WARNING"
-    }
-    
-    $hap_path = $hap_files[0].FullName
-    $install_file = $hap_files[0].Name
-    Log-Message "Selected file for installation: $install_file" "INFO"
-}
-else {
-    Log-Message "Direct HAP file detected" "INFO"
-    $hap_path = $Path
-    $install_file = $file_name
-    $extract_dir = $null
 }
 
-Load-Env
-Log-Message "Environment loaded" "INFO"
+# Check if any installable files were found
+$hap_files = @(Get-ChildItem -Path $source_dir -Filter "*.hap" -Recurse)
+$hsp_files = @(Get-ChildItem -Path $source_dir -Filter "*.hsp" -Recurse)
+$har_files = @(Get-ChildItem -Path $source_dir -Filter "*.har" -Recurse)
 
-try {
-    # Send file to device
-    Log-Message "Sending $install_file to device (size: $('{0:F2}' -f ((Get-Item $hap_path).Length / 1MB)) MB)..." "INFO"
-    hdc file send $hap_path $temp_dir
-    Log-Message "File transfer completed" "SUCCESS"
-    
-    # Install app
-    Log-Message "Installing app on device..." "INFO"
-    hdc shell bm install -p $temp_dir
-    Log-Message "Installation command completed" "SUCCESS"
-}
-catch {
-    Log-Message "Installation process failed: $_" "ERROR"
+$total_files = $hap_files.Count + $hsp_files.Count + $har_files.Count
+
+if ($total_files -eq 0) {
+    Write-Output "Error: No installable files found (.hap, .hsp, .har)"
+    if (Test-Path $local_temp) {
+        Remove-Item -Path $local_temp -Recurse -Force | Out-Null
+    }
     Unload-Env
     return
 }
 
-# Cleanup
-Log-Message "Cleaning up device temporary files..." "INFO"
-hdc shell rm -rf $temp_dir
-Log-Message "Device cleanup completed" "SUCCESS"
+Write-Output "Found $($hap_files.Count) .hap file(s), $($hsp_files.Count) .hsp file(s), $($har_files.Count) .har file(s)"
 
-if ($extract_dir) {
-    Log-Message "Cleaning up local extraction directory..." "INFO"
-    Remove-Item -Path $extract_dir -Recurse -Force
-    Log-Message "Local cleanup completed" "SUCCESS"
+# Copy all files to device and install from directory
+try {
+    # Create device temp directory
+    Write-Output "Creating device directory: $temp_dir"
+    hdc shell mkdir -p $temp_dir
+    
+    # Copy all files to device temp directory in parallel
+    $all_files = $hap_files + $hsp_files + $har_files
+    $total = $all_files.Count
+    
+    Write-Host "Copying $total files to device (parallel)..." -ForegroundColor Yellow
+    Write-Host ""
+    
+    $jobs = @()
+    
+    foreach ($file in $all_files) {
+        $job = Start-Job -ScriptBlock {
+            param($filePath, $targetDir, $fileName)
+            $result = hdc file send $filePath $targetDir 2>&1
+            return @{
+                FileName = $fileName
+                Success = $LASTEXITCODE -eq 0
+                Output = $result
+            }
+        } -ArgumentList $file.FullName, $temp_dir, $file.Name
+        
+        $jobs += $job
+    }
+    
+    # Wait for all jobs to complete and show progress
+    $completed = 0
+    
+    while ($jobs.Count -gt 0) {
+        $finished = @()
+        
+        foreach ($job in $jobs) {
+            if ($job.State -eq 'Completed') {
+                $result = Receive-Job $job
+                $completed++
+                
+                $percent = [math]::Round(($completed / $total) * 100, 1)
+                Write-Host "[$completed/$total" -NoNewline -ForegroundColor Cyan
+                Write-Host " $percent%" -NoNewline -ForegroundColor Green
+                Write-Host "] " -NoNewline -ForegroundColor Cyan
+                Write-Host "Sent: $($result.FileName)"
+                
+                Remove-Job $job
+                $finished += $job
+            }
+        }
+        
+        # Remove finished jobs from array
+        $jobs = $jobs | Where-Object { $_ -notin $finished }
+        
+        if ($jobs.Count -gt 0) {
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    
+    Write-Host ""
+    Write-Host "Installing from device directory..." -ForegroundColor Yellow
+    hdc shell bm install -p $temp_dir
+    
+    Write-Host -ForegroundColor GREEN "[√] " -NoNewline
+    Write-Output "all files installed successfully"
+    
+    # Cleanup
+    if (Test-Path $local_temp) {
+        Remove-Item -Path $local_temp -Recurse -Force | Out-Null
+    }
+    hdc shell rm -rf $temp_dir
+    
+} catch {
+    Write-Output "Error during installation: $_"
+    if (Test-Path $local_temp) {
+        Remove-Item -Path $local_temp -Recurse -Force | Out-Null
+    }
+    Unload-Env
+    return
 }
 
-Log-Message "Starting installed app..." "INFO"
 OH-Start-App
 
 Unload-Env
-Log-Message "Environment restored" "INFO"
 
-$end_time = Get-Date
-$elapsed = ($end_time - $start_time).TotalSeconds
-Log-Message "Installation completed successfully in ${elapsed} seconds" "SUCCESS"
+Write-Host -ForegroundColor GREEN "[√] " -NoNewline;
+Write-Output "install app successfully."
