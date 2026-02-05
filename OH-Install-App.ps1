@@ -151,10 +151,18 @@ try {
                 $completed++
                 
                 $percent = [math]::Round(($completed / $total) * 100, 1)
-                Write-Host "[$completed/$total" -NoNewline -ForegroundColor Cyan
+                
+                # Display progress on same line
+                Write-Host "`r[$completed/$total" -NoNewline -ForegroundColor Cyan
                 Write-Host " $percent%" -NoNewline -ForegroundColor Green
-                Write-Host "] " -NoNewline -ForegroundColor Cyan
-                Write-Host "Sent: $($result.FileName)"
+                Write-Host "] Sent: $($result.FileName)" -NoNewline -ForegroundColor White
+                
+                # Clear rest of line
+                $consoleWidth = $Host.UI.RawUI.WindowSize.Width
+                $currentLineLength = "[$completed/$total $percent%] Sent: $($result.FileName)".Length
+                if ($currentLineLength -lt $consoleWidth) {
+                    Write-Host (" " * ($consoleWidth - $currentLineLength - 1)) -NoNewline
+                }
                 
                 Remove-Job $job
                 $finished += $job
